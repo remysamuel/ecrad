@@ -542,7 +542,7 @@ contains
   ! do_transpose_2d class data member.
   subroutine get_char_matrix(this, var_name, matrix, do_transp)
 
-    USE MPL_MODULE, ONLY : MPL_BROADCAST_CHAR2, MPL_BROADCAST, MPL_NPROC
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_BROADCAST, MPL_NPROC
 
     class(netcdf_file)                         :: this
     character(len=*),              intent(in)  :: var_name
@@ -570,7 +570,7 @@ contains
           matrix(:,:) = ''
         end if
 
-        CALL MPL_BROADCAST_CHAR2(matrix, mtagrad, 1, &
+        CALL MPL_BROADCAST(matrix, mtagrad, 1, &
              &  CDSTRING='EASY_NETCDF_READ_MPI:GET_CHAR_MATRIX')
       end if
     end if
@@ -825,7 +825,7 @@ contains
   ! final optional argument
   subroutine get_real_array5(this, var_name, var, ipermute)
 
-    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_BROADCAST_REAL85,MPL_NPROC
+    USE MPL_MODULE, ONLY : MPL_BROADCAST,MPL_NPROC
 
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
@@ -852,7 +852,7 @@ contains
           allocate(var(n(1),n(2),n(3),n(4),n(5)))
         end if
 
-        CALL MPL_BROADCAST_REAL85(var, mtagrad, 1, &
+        CALL MPL_BROADCAST(var, mtagrad, 1, &
              &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY5')
       end if
     end if
@@ -864,7 +864,7 @@ contains
   ! imp_type : choose between JP_(BLOCKING/NON-BLOCKING)_(STANDARD/BUFFERED)
   subroutine get_real_array5_active(this, var_name, var, iactive_rank, ipermute, irequest, imp_type)
 
-    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_BROADCAST_REAL85, MPL_NPROC, MPL_RANK
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC, MPL_RANK
 
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
@@ -896,7 +896,7 @@ contains
         allocate(var(n(1),n(2),n(3),n(4),n(5)))
       end if
 
-      CALL MPL_BROADCAST_REAL85(var, mtagrad+iactive_rank, iactive_rank, &
+      CALL MPL_BROADCAST(var, mtagrad+iactive_rank, iactive_rank, &
            &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY5', krequest=irequest, kmp_type=imp_type)
     end if
 
@@ -907,7 +907,7 @@ contains
   ! final optional argument
   subroutine get_real_array6(this, var_name, var, ipermute)
 
-    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_BROADCAST_REAL86, MPL_NPROC
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_BROADCAST, MPL_NPROC
 
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
@@ -934,7 +934,7 @@ contains
           allocate(var(n(1),n(2),n(3),n(4),n(5),n(6)))
         end if
 
-        CALL MPL_BROADCAST_REAL86(var, mtagrad, 1, &
+        CALL MPL_BROADCAST(var, mtagrad, 1, &
              &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY6')
       end if
     end if
@@ -989,7 +989,7 @@ contains
   ! Get a global attribute as a character string
   subroutine get_global_attribute(this, attr_name, attr_str)
 
-    USE MPL_MODULE, ONLY : MPL_BROADCAST,MPL_BROADCAST_REAL86, MPL_NPROC
+    USE MPL_MODULE, ONLY : MPL_BROADCAST,MPL_BROADCAST, MPL_NPROC
 
     class(netcdf_file) :: this
 
