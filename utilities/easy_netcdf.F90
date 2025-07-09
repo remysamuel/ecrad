@@ -2145,6 +2145,8 @@ contains
   end subroutine get_real_array4
 
   subroutine get_real_array5(this, var_name, var, ipermute, ld_first_touch)
+    use netcdf, only: NF90_MAX_VAR_DIMS, NF90_NOERR, nf90_get_var, nf90_strerror
+
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
     real(jprb), allocatable, intent(out) :: var(:,:,:,:,:)
@@ -2324,6 +2326,8 @@ if (present(ld_first_touch)) then
   end subroutine get_real_array5
 
 subroutine get_real_array6(this, var_name, var, ipermute, ld_first_touch)
+    use netcdf, only: NF90_MAX_VAR_DIMS, NF90_NOERR, nf90_get_var, nf90_strerror
+
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
     real(jprb), allocatable, intent(out) :: var(:,:,:,:,:,:)
