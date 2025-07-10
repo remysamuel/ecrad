@@ -1015,84 +1015,83 @@ contains
   end subroutine get_global_attribute
 
   !---------------------------------------------------------------------
-  ! Read 3D array into "var", which must be allocatable and will be
-  ! reallocated if necessary.  Whether to pemute is specifed by the
-  ! final optional argument
-  subroutine get_real_matrix_indexed(this, var_name, var, index, ipermute)
-
-    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC
-
-    class(netcdf_file)                   :: this
-    character(len=*), intent(in)         :: var_name
-    real(jprb), allocatable, intent(out) :: var(:,:)
-    integer, intent(in)                  :: index
-    integer, optional, intent(in)        :: ipermute(2)
-
-    integer                              :: n(2)
-
-    n = 0
-
-    if (this%is_master_task) then
-      call this%file%get(var_name, var, index, ipermute)
-      n = shape(var)
-    end if
-
-    if (MPL_NPROC() > 1) then
-      CALL MPL_BROADCAST(n, mtagrad, 1, &
-           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED:SIZE')
-
-      if (.not. this%is_master_task) then
-        if (allocated(var)) deallocate(var)
-        allocate(var(n(1),n(2)))
-      end if
-
-      CALL MPL_BROADCAST(var, mtagrad, 1, &
-           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED')
-    end if
-
-  end subroutine get_real_matrix_indexed
-
-
-  !---------------------------------------------------------------------
-  ! Read 3D array into "var", which must be allocatable and will be
-  ! reallocated if necessary.  Whether to pemute is specifed by the
-  ! final optional argument
-  subroutine get_real_matrix_indexed2(this, var_name, var, index4, index5, ipermute)
+  ! Read 2D array into "matrix", which must be allocatable and will be
+  ! reallocated if necessary.  Whether to transpose is specifed by the
+  ! final optional argument, but can also be specified by the
+  ! do_transpose_2d class data member.
+  subroutine get_real_matrix_indexed(this, var_name, matrix, index, do_transp)
 
     USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC
 
     class(netcdf_file)                   :: this
     character(len=*), intent(in)         :: var_name
     real(jprb), allocatable, intent(out) :: matrix(:,:)
-    integer, intent(in)                  :: index4, index5
-    integer, optional, intent(in)        :: ipermute(2)
+    integer, intent(in)                  :: index
+    logical, optional, intent(in):: do_transp ! Transpose data?
 
     integer                              :: n(2)
 
     n = 0
 
     if (this%is_master_task) then
-      call this%file%get(var_name, var, index4, index5, ipermute)
-      n = shape(var)
+      call this%file%get(var_name, matrix, index, do_transp)
+      n = shape(matrix)
     end if
 
     if (MPL_NPROC() > 1) then
       CALL MPL_BROADCAST(n, mtagrad, 1, &
-           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED2:SIZE')
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_MATRIX_INDEXED:SIZE')
 
       if (.not. this%is_master_task) then
-        if (allocated(var)) deallocate(var)
-        allocate(var(n(1),n(2)))
+        if(allocated(matrix))deallocate(matrix)
+        allocate(matrix(n(1),n(2)))
       end if
 
-      CALL MPL_BROADCAST(var, mtagrad, 1, &
-           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED2')
+      CALL MPL_BROADCAST(matrix, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_MATRIX_INDEXED')
+    end if
+
+  end subroutine get_real_matrix_indexed
+
+
+  !---------------------------------------------------------------------
+  ! Read 2D array into "matrix", which must be allocatable and will be
+  ! reallocated if necessary.  Whether to transpose is specifed by the
+  ! final optional argument, but can also be specified by the
+  ! do_transpose_2d class data member.
+  subroutine get_real_matrix_indexed2(this, var_name, matrix, index3, index4, do_transp)
+
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC
+
+    class(netcdf_file)                   :: this
+    character(len=*), intent(in)         :: var_name
+    real(jprb), allocatable, intent(out) :: matrix(:,:)
+    integer, intent(in)                  :: index3, index4
+    logical, optional, intent(in):: do_transp ! Transpose data?
+
+    integer                              :: n(2)
+
+    n = 0
+
+    if (this%is_master_task) then
+      call this%file%get(var_name, matrix, index3, index4, do_transp)
+      n = shape(matrix)
+    end if
+
+    if (MPL_NPROC() > 1) then
+      CALL MPL_BROADCAST(n, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_MATRIX_INDEXED2:SIZE')
+
+      if (.not. this%is_master_task) then
+        if (allocated(matrix)) deallocate(matrix)
+        allocate(matrix(n(1),n(2)))
+      end if
+
+      CALL MPL_BROADCAST(matrix, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_MATRIX_INDEXED2')
     end if
 
   end subroutine get_real_matrix_indexed2
 
-
-  !---------------------------------------------------------------------
-  ! Read 4D array into "var", which must be allocatable and will be
 
 end module easy_netcdf_read_mpi
