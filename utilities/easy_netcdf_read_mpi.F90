@@ -1015,264 +1015,84 @@ contains
   end subroutine get_global_attribute
 
   !---------------------------------------------------------------------
-  ! Read matrix of data from a larger array, which must be allocatable
-  ! and will be reallocated if necessary.  Whether to transpose is
-  ! specifed by the final optional argument, but can also be specified
-  ! by the do_transpose_2d class data member.
-  subroutine get_real_matrix_indexed(this, var_name, matrix, index, do_transp)
-    use netcdf, only: NF90_MAX_VAR_DIMS, NF90_NOERR, nf90_get_var, nf90_strerror
+  ! Read 3D array into "var", which must be allocatable and will be
+  ! reallocated if necessary.  Whether to pemute is specifed by the
+  ! final optional argument
+  subroutine get_real_matrix_indexed(this, var_name, var, index, ipermute)
 
-    class(netcdf_file)           :: this
-    character(len=*), intent(in) :: var_name
-    integer, intent(in)          :: index
-    real(jprb), allocatable, intent(out) :: matrix(:,:)
-    logical, optional, intent(in):: do_transp ! Transpose data?
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC
 
-    real(jprb), allocatable      :: tmp_matrix(:,:)
-    integer                      :: ndimlen1, ndimlen2
-    integer                      :: istatus
-    integer                      :: ivarid, ndims
-    integer                      :: ndimlens(NF90_MAX_VAR_DIMS)
-    integer                      :: vstart(NF90_MAX_VAR_DIMS)
-    integer                      :: vcount(NF90_MAX_VAR_DIMS)
-    integer                      :: j, ntotal
-    logical                      :: do_transpose
+    class(netcdf_file)                   :: this
+    character(len=*), intent(in)         :: var_name
+    real(jprb), allocatable, intent(out) :: var(:,:)
+    integer, intent(in)                  :: index
+    integer, optional, intent(in)        :: ipermute(2)
 
-    ! Decide whether to transpose the array
-    if (present(do_transp)) then
-      do_transpose = do_transp
-    else
-      do_transpose = this%do_transpose_2d
+    integer                              :: n(2)
+
+    n = 0
+
+    if (this%is_master_task) then
+      call this%file%get(var_name, var, index, ipermute)
+      n = shape(var)
     end if
 
-    call this%get_variable_id(var_name, ivarid)
-    call this%get_array_dimensions(ivarid, ndims, ndimlens)
+    if (MPL_NPROC() > 1) then
+      CALL MPL_BROADCAST(n, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED:SIZE')
 
-    ! Ensure the variable has no more than two non-singleton
-    ! dimensions aside from the last one
-    ntotal = 1
-    do j = 1, ndims-1
-      ntotal = ntotal * ndimlens(j)
-      if (j > 2 .and. ndimlens(j) > 1) then
-        write(nulerr,'(a,a,a)') '*** Error reading 2D slice from NetCDF variable ', &
-           & var_name, &
-           & ': all dimensions except the first, second and last must be singletons'
-        call my_abort('Error reading NetCDF file')
-      end if
-    end do
-
-    if (index < 1 .or. index > ndimlens(ndims)) then
-      write(nulerr,'(a,i0,a,a,a,i0)') '*** Error reading element ', index, &
-           &  ' of NetCDF variable ', &
-           &    var_name, ' with outer dimension ', ndimlens(ndims)
-      call my_abort('Error reading NetCDF file')
-    end if
-
-    ! Work out dimension lengths
-    if (ndims >= 2) then
-      ndimlen1 = ndimlens(1)
-      ndimlen2 = ntotal/ndimlen1
-    else
-      ndimlen1 = ntotal
-      ndimlen2 = 1
-    end if
-
-    vstart(1:ndims-1) = 1
-    vstart(ndims)     = index
-    vcount(1:ndims-1) = ndimlens(1:ndims-1)
-    vcount(ndims)     = 1
-
-    if (do_transpose) then
-      ! Read and transpose
-      allocate(tmp_matrix(ndimlen1, ndimlen2))
-
-      ! Reallocate if necessary
-      if (allocated(matrix)) then
-        if (size(matrix,1) /= ndimlen2 .or. size(matrix,2) /= ndimlen1) then
-          if (this%iverbose >= 1) then
-            write(nulout,'(a,a)') '  Warning: resizing matrix to read ', var_name
-          end if
-          allocate(matrix(ndimlen2, ndimlen1))
-        end if
-      else
-        allocate(matrix(ndimlen2, ndimlen1))
+      if (.not. this%is_master_task) then
+        if (allocated(var)) deallocate(var)
+        allocate(var(n(1),n(2)))
       end if
 
-      if (this%iverbose >= 3) then
-        write(nulout,'(a,i0,a,a,a,i0,a,i0,a)') '  Reading slice ', index, &
-             &  ' of ', var_name, ' as ', ndimlen2, 'x', ndimlen1, ' array'
-      end if
-
-      istatus = nf90_get_var(this%ncid, ivarid, tmp_matrix, &
-           &                 start=vstart, count=vcount)
-      matrix = transpose(tmp_matrix)
-      deallocate(tmp_matrix)
-    else
-      ! Read data without transposition
-
-      ! Reallocate if necessary
-      if (allocated(matrix)) then
-        if (size(matrix,1) /= ndimlen1 .or. size(matrix,2) /= ndimlen2) then
-          if (this%iverbose >= 1) then
-            write(nulout,'(a,a)') '  Warning: resizing matrix to read ', var_name
-          end if
-          allocate(matrix(ndimlen1, ndimlen2))
-        end if
-      else
-        allocate(matrix(ndimlen1, ndimlen2))
-      end if
-
-      if (this%iverbose >= 3) then
-        write(nulout,'(a,i0,a,a,a,i0,a,i0,a)') '  Reading slice ', index, &
-             &  ' of ', var_name, ' as ', ndimlen1, 'x', ndimlen2, ' array'
-      end if
-
-      istatus = nf90_get_var(this%ncid, ivarid, matrix, &
-           &                 start=vstart, count=vcount)
-    end if
-
-    if (istatus /= NF90_NOERR) then
-      write(nulerr,'(a,a,a,a)') '*** Error reading 2D slice of NetCDF variable ', &
-           &    var_name, ': ', trim(nf90_strerror(istatus))
-      call my_abort('Error reading NetCDF file')
+      CALL MPL_BROADCAST(var, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED')
     end if
 
   end subroutine get_real_matrix_indexed
 
 
   !---------------------------------------------------------------------
-  ! Read matrix of data from a larger array, which must be allocatable
-  ! and will be reallocated if necessary.  Whether to transpose is
-  ! specifed by the final optional argument, but can also be specified
-  ! by the do_transpose_2d class data member.
-  subroutine get_real_matrix_indexed2(this, var_name, matrix, index3, index4, do_transp)
-    use netcdf, only: NF90_MAX_VAR_DIMS, NF90_NOERR, nf90_get_var, nf90_strerror
+  ! Read 3D array into "var", which must be allocatable and will be
+  ! reallocated if necessary.  Whether to pemute is specifed by the
+  ! final optional argument
+  subroutine get_real_matrix_indexed2(this, var_name, var, index4, index5, ipermute)
 
-    class(netcdf_file)           :: this
-    character(len=*), intent(in) :: var_name
-    integer, intent(in)          :: index3, index4
+    USE MPL_MODULE, ONLY : MPL_BROADCAST, MPL_NPROC
+
+    class(netcdf_file)                   :: this
+    character(len=*), intent(in)         :: var_name
     real(jprb), allocatable, intent(out) :: matrix(:,:)
-    logical, optional, intent(in):: do_transp ! Transpose data?
+    integer, intent(in)                  :: index4, index5
+    integer, optional, intent(in)        :: ipermute(2)
 
-    real(jprb), allocatable      :: tmp_matrix(:,:)
-    integer                      :: ndimlen1, ndimlen2
-    integer                      :: istatus
-    integer                      :: ivarid, ndims
-    integer                      :: ndimlens(NF90_MAX_VAR_DIMS)
-    integer                      :: vstart(NF90_MAX_VAR_DIMS)
-    integer                      :: vcount(NF90_MAX_VAR_DIMS)
-    integer                      :: j, ntotal
-    logical                      :: do_transpose
+    integer                              :: n(2)
 
-    ! Decide whether to transpose the array
-    if (present(do_transp)) then
-      do_transpose = do_transp
-    else
-      do_transpose = this%do_transpose_2d
+    n = 0
+
+    if (this%is_master_task) then
+      call this%file%get(var_name, var, index4, index5, ipermute)
+      n = shape(var)
     end if
 
-    call this%get_variable_id(var_name, ivarid)
-    call this%get_array_dimensions(ivarid, ndims, ndimlens)
+    if (MPL_NPROC() > 1) then
+      CALL MPL_BROADCAST(n, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED2:SIZE')
 
-    ! Ensure the variable has no more than three non-singleton
-    ! dimensions aside from the last one
-    ntotal = 1
-    do j = 1, ndims-1
-      ntotal = ntotal * ndimlens(j)
-      if (j > 3 .and. ndimlens(j) > 1) then
-        write(nulerr,'(a,a,a)') '*** Error reading 2D slice from NetCDF variable ', &
-           & var_name, &
-           & ': all dimensions except the first, second, third and last must be singletons'
-        call my_abort('Error reading NetCDF file')
-      end if
-    end do
-
-    if (index3 < 1 .or. index3 > ndimlens(3)) then
-      write(nulerr,'(a,i0,a,a,a,i0)') '*** Error reading element ', index3, &
-           &  ' of NetCDF variable ', &
-           &    var_name, ' with 4th dimension ', ndimlens(4)
-      call my_abort('Error reading NetCDF file')
-    end if
-    if (index4 < 1 .or. index4 > ndimlens(ndims)) then
-      write(nulerr,'(a,i0,a,a,a,i0)') '*** Error reading element ', index4, &
-           &  ' of NetCDF variable ', &
-           &    var_name, ' with outer dimension ', ndimlens(ndims)
-      call my_abort('Error reading NetCDF file')
-    end if
-
-    ! Work out dimension lengths
-    if (ndims >= 2) then
-      ndimlen1 = ndimlens(1)
-      ndimlen2 = ntotal/ndimlen1
-    else
-      ndimlen1 = ntotal
-      ndimlen2 = 1
-    end if
-
-    vstart(1:ndims-1) = 1
-    vstart(3)         = index3
-    vstart(ndims)     = index4
-    vcount(1:ndims-1) = ndimlens(1:ndims-1)
-    vcount(3)         = 1
-    vcount(ndims)     = 1
-
-    if (do_transpose) then
-      ! Read and transpose
-      allocate(tmp_matrix(ndimlen1, ndimlen2))
-
-      ! Reallocate if necessary
-      if (allocated(matrix)) then
-        if (size(matrix,1) /= ndimlen2 .or. size(matrix,2) /= ndimlen1) then
-          if (this%iverbose >= 1) then
-            write(nulout,'(a,a)') '  Warning: resizing matrix to read ', var_name
-          end if
-          allocate(matrix(ndimlen2, ndimlen1))
-        end if
-      else
-        allocate(matrix(ndimlen2, ndimlen1))
+      if (.not. this%is_master_task) then
+        if (allocated(var)) deallocate(var)
+        allocate(var(n(1),n(2)))
       end if
 
-      if (this%iverbose >= 3) then
-        write(nulout,'(a,i0,a,i0,a,a,a,i0,a,i0,a)') '  Reading slice ', index3, ',', index4, &
-             &  ' of ', var_name, ' as ', ndimlen2, 'x', ndimlen1, ' array'
-      end if
-
-      istatus = nf90_get_var(this%ncid, ivarid, tmp_matrix, &
-           &                 start=vstart, count=vcount)
-      matrix = transpose(tmp_matrix)
-      deallocate(tmp_matrix)
-    else
-      ! Read data without transposition
-
-      ! Reallocate if necessary
-      if (allocated(matrix)) then
-        if (size(matrix,1) /= ndimlen1 .or. size(matrix,2) /= ndimlen2) then
-          if (this%iverbose >= 1) then
-            write(nulout,'(a,a)') '  Warning: resizing matrix to read ', var_name
-          end if
-          allocate(matrix(ndimlen1, ndimlen2))
-        end if
-      else
-        allocate(matrix(ndimlen1, ndimlen2))
-      end if
-
-      if (this%iverbose >= 3) then
-        write(nulout,'(a,i0,a,i0,a,a,a,i0,a,i0,a)') '  Reading slice ', index3, ',', index4, &
-             &  ' of ', var_name, ' as ', ndimlen1, 'x', ndimlen2, ' array'
-      end if
-
-      istatus = nf90_get_var(this%ncid, ivarid, matrix, &
-           &                 start=vstart, count=vcount)
-    end if
-
-    if (istatus /= NF90_NOERR) then
-      write(nulerr,'(a,a,a,a)') '*** Error reading 2D slice of NetCDF variable ', &
-           &    var_name, ': ', trim(nf90_strerror(istatus))
-      call my_abort('Error reading NetCDF file')
+      CALL MPL_BROADCAST(var, mtagrad, 1, &
+           &  CDSTRING='EASY_NETCDF_READ_MPI:GET_REAL_ARRAY3_INDEXED2')
     end if
 
   end subroutine get_real_matrix_indexed2
 
 
+  !---------------------------------------------------------------------
+  ! Read 4D array into "var", which must be allocatable and will be
 
 end module easy_netcdf_read_mpi
